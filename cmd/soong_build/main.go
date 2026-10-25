@@ -20,6 +20,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 	"time"
 
@@ -335,8 +337,34 @@ func parseAvailableEnv() map[string]string {
 	return result
 }
 
+// writeHeapProfiles snapshots the heap to dir each time it grows by another
+// 500MB, so a run killed for memory still leaves a profile of what filled it.
+func writeHeapProfiles(dir string) {
+	var stats runtime.MemStats
+	next := uint64(1 << 30)
+	for i := 0; ; {
+		time.Sleep(2 * time.Second)
+		runtime.ReadMemStats(&stats)
+		if stats.HeapAlloc < next {
+			continue
+		}
+		next = stats.HeapAlloc + 500<<20
+		f, err := os.Create(filepath.Join(dir, fmt.Sprintf("heap-%03d-%dM.prof", i, stats.HeapAlloc>>20)))
+		if err != nil {
+			return
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+		i++
+	}
+}
+
 func main() {
 	flag.Parse()
+
+	if dir := os.Getenv("SOONG_HEAP_PROFILE_DIR"); dir != "" {
+		go writeHeapProfiles(dir)
+	}
 
 	shared.ReexecWithDelveMaybe(delveListen, delvePath)
 	android.InitSandbox(topDir)

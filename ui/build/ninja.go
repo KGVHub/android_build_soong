@@ -117,6 +117,8 @@ func runNinjaForBuild(ctx Context, config Config) {
 			"ASAN_SYMBOLIZER_PATH",
 			"HOME",
 			"JAVA_HOME",
+			// Low-memory hosts use it to pick a lighter JVM garbage collector.
+			"JAVA_TOOL_OPTIONS",
 			"LANG",
 			"LC_MESSAGES",
 			"OUT_DIR",

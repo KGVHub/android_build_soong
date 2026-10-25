@@ -167,6 +167,13 @@ func primaryBuilderInvocation(
 
 	commonArgs = append(commonArgs, "-l", filepath.Join(config.FileListDir(), "Android.bp.list"))
 	invocationEnv := make(map[string]string)
+	// soong_build runs under "env -i"; let low-memory hosts tune its Go
+	// garbage collector (GOGC; GOMEMLIMIT with Go 1.19+).
+	for _, name := range []string{"GOGC", "GOMEMLIMIT", "GOMAXPROCS", "SOONG_HEAP_PROFILE_DIR", "BLUEPRINT_COMPACT_ACTIONS", "BLUEPRINT_VARIANT_STATS", "BLUEPRINT_SKIP_MODULE_TYPES"} {
+		if value, ok := os.LookupEnv(name); ok {
+			invocationEnv[name] = value
+		}
+	}
 	debugMode := os.Getenv("SOONG_DELVE") != ""
 
 	if debugMode {
@@ -248,6 +255,9 @@ func bootstrapBlueprint(ctx Context, config Config) {
 	bootstrapEpochCleanup(ctx, config)
 
 	mainSoongBuildExtraArgs := []string{"-o", config.SoongNinjaFile()}
+	if profile, ok := os.LookupEnv("SOONG_MEMPROFILE"); ok {
+		mainSoongBuildExtraArgs = append(mainSoongBuildExtraArgs, "--memprofile", profile)
+	}
 	if config.EmptyNinjaFile() {
 		mainSoongBuildExtraArgs = append(mainSoongBuildExtraArgs, "--empty-ninja-file")
 	}

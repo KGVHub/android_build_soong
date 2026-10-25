@@ -461,8 +461,13 @@ func metalavaCmd(ctx android.ModuleContext, rule *android.RuleBuilder, javaVersi
 
 	cmd.BuiltTool("metalava").ImplicitTool(ctx.Config().HostJavaToolPath(ctx, "metalava.jar")).
 		Flag(config.JavacVmFlags).
-		Flag("-J--add-opens=java.base/java.util=ALL-UNNAMED").
-		FlagWithArg("-encoding ", "UTF-8").
+		Flag("-J--add-opens=java.base/java.util=ALL-UNNAMED")
+	if ctx.Config().IsEnvTrue("BLUEPRINT_COMPACT_ACTIONS") {
+		// Cap the heap and use the serial collector, which needs far less
+		// memory beyond the heap than G1. These jobs run one at a time.
+		cmd.Flag("-J-Xmx3g").Flag("-J-XX:+UseSerialGC").Flag("-J-XX:TieredStopAtLevel=1")
+	}
+	cmd.FlagWithArg("-encoding ", "UTF-8").
 		FlagWithArg("-source ", javaVersion.String()).
 		FlagWithRspFileInputList("@", android.PathForModuleOut(ctx, "metalava.rsp"), srcs).
 		FlagWithInput("@", srcJarList)
@@ -503,8 +508,10 @@ func (d *Droidstubs) GenerateAndroidBuildActions(ctx android.ModuleContext) {
 		android.PathForModuleOut(ctx, "metalava.sbox.textproto")).
 		SandboxInputs()
 
-	if BoolDefault(d.properties.High_mem, false) {
+	lowMemory := ctx.Config().IsEnvTrue("BLUEPRINT_COMPACT_ACTIONS")
+	if BoolDefault(d.properties.High_mem, false) || lowMemory {
 		// This metalava run uses lots of memory, restrict the number of metalava jobs that can run in parallel.
+		// Low-memory hosts run every metalava job alone.
 		rule.HighMem()
 	}
 
